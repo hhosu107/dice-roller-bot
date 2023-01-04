@@ -395,7 +395,7 @@ async def on_ready():
     # log ready info
     print(datetime.datetime.now(), 'INFO', 'Bot ready')
     # log connected guilds number
-    print(datetime.datetime.now(), 'INFO', 'Number of servers connected to:', bot_client.guilds)
+    print(datetime.datetime.now(), 'INFO', 'Number of servers connected to:', len(bot_client.guilds))
     await bot_client.change_presence(activity=discord.Activity(name='dice rolling!',
                                                                type=discord.ActivityType.competing))
     await asyncio.sleep(10)
