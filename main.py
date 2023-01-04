@@ -38,11 +38,15 @@ async def get_prefix(bot, message):
     prefix_list.append(guild_prefix)
     return commands.when_mentioned_or(*prefix_list)(bot, message)
 
+intents = discord.Intents.all()
+intents.message_content = True
+intents.messages = True
 
 # customize bot with prefix and custom help
 bot_client = commands.AutoShardedBot(command_prefix=get_prefix,
                                      help_command=help_command,
-                                     shard_count=bot_shards)
+                                     shard_count=bot_shards,
+                                     intents=intents)
 # global var
 guilds_number = 0
 # commands short description list
@@ -391,7 +395,7 @@ async def on_ready():
     # log ready info
     print(datetime.datetime.now(), 'INFO', 'Bot ready')
     # log connected guilds number
-    print(datetime.datetime.now(), 'INFO', 'Number of servers connected to:', len(bot_client.guilds))
+    print(datetime.datetime.now(), 'INFO', 'Number of servers connected to:', bot_client.guilds)
     await bot_client.change_presence(activity=discord.Activity(name='dice rolling!',
                                                                type=discord.ActivityType.competing))
     await asyncio.sleep(10)
