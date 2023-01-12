@@ -8,8 +8,13 @@ import re
 import topgg
 
 from table2ascii import table2ascii as t2a, Alignment
+from discord import app_commands
 from discord.ext import commands, tasks
 from config import settings, jokes_db, admin_db
+
+# TODO: convert commands to slash commands with
+# discord.app_commands.CommandTree.
+# https://stackoverflow.com/questions/71165431/how-do-i-make-a-working-slash-command-in-discord-py
 
 # VARIABLES
 # Change only the no_category default string
