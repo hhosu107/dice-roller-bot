@@ -5,10 +5,9 @@ import discord
 import random
 import sqlite3
 import re
-import topgg
 
 from table2ascii import table2ascii as t2a, Alignment
-from discord import app_commands
+# from discord import app_commands
 from discord.ext import commands, tasks
 from config import settings, jokes_db, admin_db
 
@@ -25,33 +24,17 @@ bot_prefix = settings['prefix']
 bot_shards = settings['shards']
 
 
-# define prefix or mention
-async def get_prefix(bot, message):
-    # TODO: mb allow few prefixes for each guild
-    prefix_list = []
-    db = sqlite3.connect(admin_db)
-    cur = db.cursor()
-    guild_id = str(message.guild.id)
-    prefix_sql = "SELECT guild_prefix FROM guild_prefixes WHERE guild_id = ?;"
-    cur.execute(prefix_sql, [guild_id])
-    guild_prefix = cur.fetchone()
-    if guild_prefix is not None:
-        guild_prefix = guild_prefix[0]
-    else:
-        guild_prefix = bot_prefix
-    db.close()
-    prefix_list.append(guild_prefix)
-    return commands.when_mentioned_or(*prefix_list)(bot, message)
-
 intents = discord.Intents.all()
 intents.message_content = True
 intents.messages = True
 
 # customize bot with prefix and custom help
-bot_client = commands.AutoShardedBot(command_prefix=get_prefix,
+# bot_client = discord.Bot(intents=intents, help_command=help_command)
+bot_client = commands.AutoShardedBot(command_prefix=lambda bot, msg: ['/'],
                                      help_command=help_command,
                                      shard_count=bot_shards,
                                      intents=intents)
+
 # global var
 guilds_number = 0
 # commands short description list
@@ -133,10 +116,6 @@ limits = {
     "prefix": 3,
     "roll": 50
 }
-
-# top.gg integration
-if settings['send_stat']:
-    bot_client.topggpy = topgg.DBLClient(bot_client, settings['topgg'], autopost=True, post_shard_count=True)
 
 # db part
 # TODO: make log system more common (not just print command)
@@ -400,7 +379,7 @@ async def on_ready():
     # log ready info
     print(datetime.datetime.now(), 'INFO', 'Bot ready')
     # log connected guilds number
-    print(datetime.datetime.now(), 'INFO', 'Number of servers connected to:', len(bot_client.guilds))
+    print(datetime.datetime.now(), 'INFO', 'Number of servers connected to:', bot_client.guilds)
     await bot_client.change_presence(activity=discord.Activity(name='dice rolling!',
                                                                type=discord.ActivityType.competing))
     await asyncio.sleep(10)
@@ -426,20 +405,6 @@ async def on_autopost_success():
     print(datetime.datetime.now(), 'INFO', 'Posted server count on Top.gg')
 
 
-# remove prefix from Admin DB when bot was kicked from server
-@bot_client.event
-async def on_guild_remove(guild):
-    guild_id = guild.id
-    secure_guild_id = (guild_id,)
-    prefix_sql = "DELETE FROM guild_prefixes WHERE guild_id=?;"
-    db = sqlite3.connect(admin_db)
-    cur = db.cursor()
-    cur.execute(prefix_sql, secure_guild_id)
-    db.commit()
-    db.close()
-    print(datetime.datetime.now(), 'INFO', 'Dice Roller was kicked from guild with id:', guild_id)
-
-
 # LOOPS
 # status update loop
 @tasks.loop(hours=1)
@@ -458,72 +423,10 @@ async def update_jokes():
     print(datetime.datetime.now(), 'INFO', 'Jokes number updated, current number:', number_of_jokes)
     return number_of_jokes
 
-
-# ADMIN COMMANDS AND ERRORS HANDLERS
-# PREFIX GROUP
-@bot_client.group(brief=cmd_brief["prefix"], help=cmd_help["prefix"], aliases=cmd_alias["prefix"],
-                  invoke_without_command=True)
-@commands.has_permissions(administrator=True)
-async def prefix(ctx):
-    if ctx.invoked_subcommand is None:
-        await ctx.send(f'```Invalid subcommand passed. Use:\n'
-                       f'- set: to set new prefix\n'
-                       f'- restore: to restore default prefix```')
-
-
-# PREFIX SET COMMAND
-@prefix.command(name='set', brief=cmd_brief["prefix_set"], help=cmd_help["prefix_set"], aliases=cmd_alias["prefix_set"])
-@commands.cooldown(1, 1, commands.BucketType.user)
-@commands.has_permissions(administrator=True)
-async def set_prefix(ctx, new_prefix):
-    check_limit(len(new_prefix), limits["prefix"])
-    guild_id = str(ctx.guild.id)
-    secure_prefix = tuple((guild_id, str(new_prefix)))
-    prefix_sql = "INSERT OR REPLACE INTO guild_prefixes (guild_id, guild_prefix) VALUES (?,?);"
-    db = sqlite3.connect(admin_db)
-    cur = db.cursor()
-    cur.execute(prefix_sql, secure_prefix)
-    db.commit()
-    db.close()
-    await ctx.send(f'```New prefix is: {new_prefix}```')
-
-
-# PREFIX RESTORE COMMAND
-@prefix.command(name='restore', brief=cmd_brief["prefix_restore"], help=cmd_help["prefix_restore"],
-                aliases=cmd_alias["prefix_restore"])
-@commands.has_permissions(administrator=True)
-async def restore_prefix(ctx):
-    guild_id = str(ctx.guild.id)
-    secure_guild_id = (guild_id,)
-    prefix_sql = "DELETE FROM guild_prefixes WHERE guild_id=?;"
-    db = sqlite3.connect(admin_db)
-    cur = db.cursor()
-    cur.execute(prefix_sql, secure_guild_id)
-    db.commit()
-    db.close()
-    await ctx.send(f'```Prefix was restored to default value: {bot_prefix}```')
-
-
-# PREFIX SET ERRORS HANDLER
-@set_prefix.error
-async def prefix_error(ctx, error):
-    author = ctx.message.author
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.send(f'{author.mention}, sorry, but you need administrator permissions to change the bot prefix.')
-    if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(f'{author.mention}, specify valid prefix, please.\n'
-                       'Empty prefix specified.')
-    if isinstance(error, commands.ArgumentParsingError):
-        await ctx.send(f'{author.mention}, specify valid prefix, please.\n'
-                       f'Specified prefix is longer than {limits["prefix"]} symbols.')
-    if isinstance(error, commands.CommandOnCooldown):
-        await ctx.send(f'{author.mention}, this command is on cooldown.\n'
-                       f'You can use it in {round(error.retry_after, 2)} sec.')
-
-
 # USER COMMANDS AND ERRORS HANDLERS
 # JOKE COMMAND
 @bot_client.command(brief=cmd_brief["joke"], help=cmd_help["joke"], aliases=cmd_alias["joke"])
+# @bot_client.slash_command(brief=cmd_brief["joke"], help=cmd_help["joke"], aliases=cmd_alias["joke"])
 async def joke(ctx):
     random_joke_number = random.randint(1, number_of_jokes)
     sql_joke = "SELECT joke_text FROM jokes WHERE joke_id=?;"
@@ -577,6 +480,7 @@ async def d_error(ctx, error):
 
 # ROLL COMMAND
 @bot_client.command(brief=cmd_brief["roll"], help=cmd_help["roll"], usage=cmd_usage["roll"], aliases=cmd_alias["roll"])
+# @bot_client.slash_command(guild_ids=[898524462348115998, 1057983104016465971], brief=cmd_brief["roll"], help=cmd_help["roll"], usage=cmd_usage["roll"], aliases=cmd_alias["roll"])
 async def roll(ctx, *arg):
     all_dice = list(arg)
     dice_number = len(all_dice)
